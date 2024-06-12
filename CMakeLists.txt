@@ -11,7 +11,7 @@ find_package(ZLIB REQUIRED)
 add_library(cnpy STATIC cnpy.cpp)
 add_library(cnpy::cnpy ALIAS cnpy)
 target_link_libraries(cnpy PUBLIC ZLIB::ZLIB)
-target_compile_features(cnpy PUBLIC cxx_std_11)
+target_compile_features(cnpy PRIVATE cxx_std_11)
 target_include_directories(
     cnpy
     PUBLIC
