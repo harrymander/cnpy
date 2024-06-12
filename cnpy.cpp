@@ -9,14 +9,12 @@
 #include <zlib.h>
 
 #include <algorithm>
-#include <complex>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <iomanip>
 #include <istream>
-#include <limits>
 #include <regex>
 #include <stdexcept>
 
@@ -38,58 +36,46 @@ static std::ifstream open_stream(std::string fname)
     return stream;
 }
 
+static NpyArray load_npz_array(std::istream& stream, uint32_t compr_bytes, uint32_t uncompr_bytes)
+{
+    std::vector<unsigned char> buffer_compr(compr_bytes);
+    std::vector<unsigned char> buffer_uncompr(uncompr_bytes);
+    stream.read(reinterpret_cast<char *>(buffer_compr.data()), compr_bytes);
+    if (!stream.good()) {
+        throw std::runtime_error("load_npz_array: failed to read data");
+    }
+
+    z_stream d_stream;
+
+    d_stream.zalloc = Z_NULL;
+    d_stream.zfree = Z_NULL;
+    d_stream.opaque = Z_NULL;
+    d_stream.avail_in = 0;
+    d_stream.next_in = Z_NULL;
+    inflateInit2(&d_stream, -MAX_WBITS);
+
+    d_stream.avail_in = compr_bytes;
+    d_stream.next_in = &buffer_compr[0];
+    d_stream.avail_out = uncompr_bytes;
+    d_stream.next_out = &buffer_uncompr[0];
+
+    inflate(&d_stream, Z_FINISH);
+    inflateEnd(&d_stream);
+
+    std::vector<size_t> shape;
+    size_t word_size;
+    bool fortran_order;
+    cnpy::parse_npy_header(&buffer_uncompr[0], word_size, shape, fortran_order);
+
+    cnpy::NpyArray array(shape, word_size, fortran_order);
+
+    size_t offset = uncompr_bytes - array.num_bytes();
+    memcpy(array.data<unsigned char>(), &buffer_uncompr[0] + offset, array.num_bytes());
+
+    return array;
+}
+
 }; // namespace cnpy
-
-char cnpy::BigEndianTest()
-{
-    int x = 1;
-    return ((reinterpret_cast<char *>(&x))[0]) ? '<' : '>';
-}
-
-char cnpy::map_type(const std::type_info& t)
-{
-    if (t == typeid(float))
-        return 'f';
-    if (t == typeid(double))
-        return 'f';
-    if (t == typeid(long double))
-        return 'f';
-
-    if (t == typeid(int))
-        return 'i';
-    if (t == typeid(char))
-        return 'i';
-    if (t == typeid(short))
-        return 'i';
-    if (t == typeid(long))
-        return 'i';
-    if (t == typeid(long long))
-        return 'i';
-
-    if (t == typeid(unsigned char))
-        return 'u';
-    if (t == typeid(unsigned short))
-        return 'u';
-    if (t == typeid(unsigned long))
-        return 'u';
-    if (t == typeid(unsigned long long))
-        return 'u';
-    if (t == typeid(unsigned int))
-        return 'u';
-
-    if (t == typeid(bool))
-        return 'b';
-
-    if (t == typeid(std::complex<float>))
-        return 'c';
-    if (t == typeid(std::complex<double>))
-        return 'c';
-    if (t == typeid(std::complex<long double>))
-        return 'c';
-
-    else
-        return '?';
-}
 
 template <> std::vector<char>& cnpy::operator+=(std::vector<char>& lhs, const std::string& rhs)
 {
@@ -208,91 +194,6 @@ void cnpy::parse_npy_header(
     word_size = atoi(str_ws.substr(0, loc2).c_str());
 }
 
-void cnpy::parse_zip_footer(
-    std::istream& stream, uint16_t& nrecs, size_t& global_header_size, size_t& global_header_offset
-)
-{
-    constexpr auto footer_size = 22;
-    std::vector<char> footer(footer_size);
-    stream.seekg(-footer_size, std::ios_base::end);
-    if (stream.good()) {
-        throw std::runtime_error("parse_zip_footer: error seeking to footer");
-    }
-    stream.read(footer.data(), footer_size);
-    if (!stream.good()) {
-        throw std::runtime_error("parse_zip_footer: failed to read footer");
-    }
-
-    uint16_t disk_no, disk_start, nrecs_on_disk, comment_len;
-    disk_no = *reinterpret_cast<uint16_t *>(&footer[4]);
-    disk_start = *reinterpret_cast<uint16_t *>(&footer[6]);
-    nrecs_on_disk = *reinterpret_cast<uint16_t *>(&footer[8]);
-    nrecs = *reinterpret_cast<uint16_t *>(&footer[10]);
-    global_header_size = *reinterpret_cast<uint32_t *>(&footer[12]);
-    global_header_offset = *reinterpret_cast<uint32_t *>(&footer[16]);
-    comment_len = *reinterpret_cast<uint16_t *>(&footer[20]);
-
-    np_assert(disk_no == 0, "disk_no != 0");
-    np_assert(disk_start == 0, "disk_start != 0");
-    np_assert(nrecs_on_disk == nrecs, "nrecs_on_disk != nrecs");
-    np_assert(comment_len == 0, "comment_len != 0");
-}
-
-cnpy::NpyArray load_the_npy_file(std::istream& stream)
-{
-    std::vector<size_t> shape;
-    size_t word_size;
-    bool fortran_order;
-    cnpy::parse_npy_header(stream, word_size, shape, fortran_order);
-
-    cnpy::NpyArray arr(shape, word_size, fortran_order);
-    stream.read(arr.data<char>(), arr.num_bytes());
-    if (!stream.good()) {
-        throw std::runtime_error("load_the_npy_file: failed to read data");
-    }
-    return arr;
-}
-
-cnpy::NpyArray
-load_the_npz_array(std::istream& stream, uint32_t compr_bytes, uint32_t uncompr_bytes)
-{
-    std::vector<unsigned char> buffer_compr(compr_bytes);
-    std::vector<unsigned char> buffer_uncompr(uncompr_bytes);
-    stream.read(reinterpret_cast<char *>(buffer_compr.data()), compr_bytes);
-    if (!stream.good()) {
-        throw std::runtime_error("load_the_npy_file: failed to read data");
-    }
-
-    z_stream d_stream;
-
-    d_stream.zalloc = Z_NULL;
-    d_stream.zfree = Z_NULL;
-    d_stream.opaque = Z_NULL;
-    d_stream.avail_in = 0;
-    d_stream.next_in = Z_NULL;
-    inflateInit2(&d_stream, -MAX_WBITS);
-
-    d_stream.avail_in = compr_bytes;
-    d_stream.next_in = &buffer_compr[0];
-    d_stream.avail_out = uncompr_bytes;
-    d_stream.next_out = &buffer_uncompr[0];
-
-    inflate(&d_stream, Z_FINISH);
-    inflateEnd(&d_stream);
-
-    std::vector<size_t> shape;
-    size_t word_size;
-    bool fortran_order;
-    cnpy::parse_npy_header(&buffer_uncompr[0], word_size, shape, fortran_order);
-
-    cnpy::NpyArray array(shape, word_size, fortran_order);
-
-    size_t offset = uncompr_bytes - array.num_bytes();
-    memcpy(array.data<unsigned char>(), &buffer_uncompr[0] + offset, array.num_bytes());
-
-    return array;
-}
-
 cnpy::npz_t cnpy::npz_load(const std::string& fname)
 {
     auto stream = cnpy::open_stream(fname);
@@ -339,9 +240,9 @@ cnpy::npz_t cnpy::npz_load(std::istream& stream)
         uint32_t uncompr_bytes = *reinterpret_cast<uint32_t *>(&local_header[0] + 22);
 
         if (compr_method == 0) {
-            arrays[varname] = load_the_npy_file(stream);
+            arrays[varname] = npy_load(stream);
         } else {
-            arrays[varname] = load_the_npz_array(stream, compr_bytes, uncompr_bytes);
+            arrays[varname] = load_npz_array(stream, compr_bytes, uncompr_bytes);
         }
     }
 
@@ -389,8 +290,8 @@ cnpy::NpyArray cnpy::npz_load(std::istream& stream, const std::string& varname)
 
         if (vname == varname) {
             NpyArray array = (compr_method == 0) ?
-                load_the_npy_file(stream) :
-                load_the_npz_array(stream, compr_bytes, uncompr_bytes);
+                npy_load(stream) :
+                load_npz_array(stream, compr_bytes, uncompr_bytes);
             return array;
         } else {
             // skip past the data
@@ -414,5 +315,15 @@ cnpy::NpyArray cnpy::npy_load(const std::string& fname)
 
 cnpy::NpyArray cnpy::npy_load(std::istream& stream)
 {
-    return load_the_npy_file(stream);
+    std::vector<size_t> shape;
+    size_t word_size;
+    bool fortran_order;
+    cnpy::parse_npy_header(stream, word_size, shape, fortran_order);
+
+    cnpy::NpyArray arr(shape, word_size, fortran_order);
+    stream.read(arr.data<char>(), arr.num_bytes());
+    if (!stream.good()) {
+        throw std::runtime_error("npy_load: failed to read data");
+    }
+    return arr;
 }
