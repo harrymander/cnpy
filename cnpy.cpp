@@ -1,3 +1,5 @@
+// clang-format off
+
 // Copyright (C) 2011  Carl Rogers
 // Released under MIT License
 // license available in LICENSE file, or at http://www.opensource.org/licenses/mit-license.php
@@ -17,6 +19,26 @@
 #include <limits>
 #include <regex>
 #include <stdexcept>
+
+namespace cnpy {
+
+static inline void np_assert(bool condition, const std::string& msg)
+{
+    if (!condition) {
+        throw std::runtime_error(msg);
+    }
+}
+
+static std::ifstream open_stream(std::string fname)
+{
+    std::ifstream stream(fname, std::ios::binary | std::ios::in);
+    if (!stream) {
+        throw std::runtime_error("Error opening file '" + fname + "'");
+    }
+    return stream;
+}
+
+}; // namespace cnpy
 
 char cnpy::BigEndianTest()
 {
@@ -118,10 +140,7 @@ void cnpy::parse_npy_header(
     // not sure when this applies except for byte array
     loc1 = header.find("descr") + 9;
     bool littleEndian = (header[loc1] == '<' || header[loc1] == '|' ? true : false);
-    assert(littleEndian);
-
-    // char type = header[loc1+1];
-    // assert(type == map_type(T));
+    np_assert(littleEndian, "file must be little-endian");
 
     std::string str_ws = header.substr(loc1 + 2);
     loc2 = str_ws.find("'");
@@ -182,10 +201,7 @@ void cnpy::parse_npy_header(
         throw std::runtime_error("parse_npy_header: failed to find header keyword: 'descr'");
     loc1 += 9;
     bool littleEndian = (header[loc1] == '<' || header[loc1] == '|' ? true : false);
-    assert(littleEndian);
-
-    // char type = header[loc1+1];
-    // assert(type == map_type(T));
+    np_assert(littleEndian, "file must be little-endian");
 
     std::string str_ws = header.substr(loc1 + 2);
     loc2 = str_ws.find("'");
@@ -216,10 +232,10 @@ void cnpy::parse_zip_footer(
     global_header_offset = *reinterpret_cast<uint32_t *>(&footer[16]);
     comment_len = *reinterpret_cast<uint16_t *>(&footer[20]);
 
-    assert(disk_no == 0);
-    assert(disk_start == 0);
-    assert(nrecs_on_disk == nrecs);
-    assert(comment_len == 0);
+    np_assert(disk_no == 0, "disk_no != 0");
+    np_assert(disk_start == 0, "disk_start != 0");
+    np_assert(nrecs_on_disk == nrecs, "nrecs_on_disk != nrecs");
+    np_assert(comment_len == 0, "comment_len != 0");
 }
 
 cnpy::NpyArray load_the_npy_file(std::istream& stream)
@@ -276,19 +292,6 @@ load_the_npz_array(std::istream& stream, uint32_t compr_bytes, uint32_t uncompr_
 
     return array;
 }
-
-namespace cnpy {
-
-static std::ifstream open_stream(std::string fname)
-{
-    std::ifstream stream(fname, std::ios::binary | std::ios::in);
-    if (!stream) {
-        throw std::runtime_error("Error opening file '" + fname + "'");
-    }
-    return stream;
-}
-
-}; // namespace cnpy
 
 cnpy::npz_t cnpy::npz_load(const std::string& fname)
 {
