@@ -21,7 +21,7 @@
 char cnpy::BigEndianTest()
 {
     int x = 1;
-    return (((char *) &x)[0]) ? '<' : '>';
+    return ((reinterpret_cast<char *>(&x))[0]) ? '<' : '>';
 }
 
 char cnpy::map_type(const std::type_info& t)
@@ -211,13 +211,13 @@ void cnpy::parse_zip_footer(
     }
 
     uint16_t disk_no, disk_start, nrecs_on_disk, comment_len;
-    disk_no = *(uint16_t *) &footer[4];
-    disk_start = *(uint16_t *) &footer[6];
-    nrecs_on_disk = *(uint16_t *) &footer[8];
-    nrecs = *(uint16_t *) &footer[10];
-    global_header_size = *(uint32_t *) &footer[12];
-    global_header_offset = *(uint32_t *) &footer[16];
-    comment_len = *(uint16_t *) &footer[20];
+    disk_no = *reinterpret_cast<uint16_t *>(&footer[4]);
+    disk_start = *reinterpret_cast<uint16_t *>(&footer[6]);
+    nrecs_on_disk = *reinterpret_cast<uint16_t *>(&footer[8]);
+    nrecs = *reinterpret_cast<uint16_t *>(&footer[10]);
+    global_header_size = *reinterpret_cast<uint32_t *>(&footer[12]);
+    global_header_offset = *reinterpret_cast<uint32_t *>(&footer[16]);
+    comment_len = *reinterpret_cast<uint16_t *>(&footer[20]);
 
     assert(disk_no == 0);
     assert(disk_start == 0);
@@ -315,7 +315,7 @@ cnpy::npz_t cnpy::npz_load(std::istream& stream)
             break;
 
         // read in the variable name
-        uint16_t name_len = *(uint16_t *) &local_header[26];
+        uint16_t name_len = *reinterpret_cast<uint16_t *>(&local_header[26]);
         std::string varname(name_len, ' ');
         stream.read(&varname[0], name_len);
         if (!stream.good()) {
@@ -326,7 +326,7 @@ cnpy::npz_t cnpy::npz_load(std::istream& stream)
         varname.erase(varname.end() - 4, varname.end());
 
         // read in the extra field
-        uint16_t extra_field_len = *(uint16_t *) &local_header[28];
+        uint16_t extra_field_len = *reinterpret_cast<uint16_t *>(&local_header[28]);
         if (extra_field_len > 0) {
             std::vector<char> buff(extra_field_len);
             stream.read(buff.data(), extra_field_len);
@@ -369,7 +369,7 @@ cnpy::NpyArray cnpy::npz_load(std::istream& stream, const std::string& varname)
             break;
 
         // read in the variable name
-        uint16_t name_len = *(uint16_t *) &local_header[26];
+        uint16_t name_len = *reinterpret_cast<uint16_t *>(&local_header[26]);
         std::string vname(name_len, ' ');
         stream.read(&vname[0], name_len);
         if (!stream.good()) {
@@ -378,7 +378,7 @@ cnpy::NpyArray cnpy::npz_load(std::istream& stream, const std::string& varname)
         vname.erase(vname.end() - 4, vname.end()); // erase the lagging .npy
 
         // read in the extra field
-        uint16_t extra_field_len = *(uint16_t *) &local_header[28];
+        uint16_t extra_field_len = *reinterpret_cast<uint16_t *>(&local_header[28]);
         stream.seekg(extra_field_len, std::ios_base::cur);
         if (stream.fail()) {
             throw std::runtime_error("npz_load: failed to seek past extra field");
@@ -395,7 +395,7 @@ cnpy::NpyArray cnpy::npz_load(std::istream& stream, const std::string& varname)
             return array;
         } else {
             // skip past the data
-            uint32_t size = *(uint32_t *) &local_header[22];
+            uint32_t size = *reinterpret_cast<uint32_t *>(&local_header[22]);
             stream.seekg(size, std::ios_base::cur);
             if (stream.fail()) {
                 throw std::runtime_error("npz_load: failed to seek past data");

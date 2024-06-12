@@ -83,7 +83,7 @@ template <typename T> std::vector<char>& operator+=(std::vector<char>& lhs, cons
 {
     // write in little endian
     for (size_t byte = 0; byte < sizeof(T); byte++) {
-        char val = *((char *) &rhs + byte);
+        char val = *(reinterpret_cast<char *>(&rhs) + byte);
         lhs.push_back(val);
     }
     return lhs;
