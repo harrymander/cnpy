@@ -18,6 +18,9 @@ target_include_directories(
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
         $<INSTALL_INTERFACE:include>
 )
+if(NOT MSVC)
+    target_compile_options(cnpy PRIVATE -Wall -Wextra -Werror)
+endif()
 
 if(NOT DEFINED CNPY_INSTALL)
     if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
