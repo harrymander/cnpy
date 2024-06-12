@@ -19,7 +19,7 @@ target_include_directories(
         $<INSTALL_INTERFACE:include>
 )
 if(NOT MSVC)
-    target_compile_options(cnpy PRIVATE -Wall -Wextra -Werror)
+    target_compile_options(cnpy PRIVATE -Wall -Wextra)
 endif()
 
 if(NOT DEFINED CNPY_INSTALL)
