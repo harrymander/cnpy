@@ -287,7 +287,7 @@ static std::ifstream open_stream(std::string fname)
 {
     std::ifstream stream(fname, std::ios::binary | std::ios::in);
     if (!stream) {
-        throw std::runtime_error("npz_load: Error! Unable to open file " + fname + "!");
+        throw std::runtime_error("Error opening file '" + fname + "'");
     }
     return stream;
 }
