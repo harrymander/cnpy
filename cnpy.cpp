@@ -321,9 +321,11 @@ cnpy::NpyArray cnpy::npy_load(std::istream& stream)
     cnpy::parse_npy_header(stream, word_size, shape, fortran_order);
 
     cnpy::NpyArray arr(shape, word_size, fortran_order);
-    stream.read(arr.data<char>(), arr.num_bytes());
-    if (!stream.good()) {
-        throw std::runtime_error("npy_load: failed to read data");
+    if (arr.num_vals > 0) {
+        stream.read(arr.data<char>(), arr.num_bytes());
+        if (!stream.good()) {
+            throw std::runtime_error("npy_load: failed to read data");
+        }
     }
     return arr;
 }

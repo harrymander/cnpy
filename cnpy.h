@@ -33,11 +33,11 @@ struct NpyArray {
 
     NpyArray() : shape(0), word_size(0), fortran_order(0), num_vals(0) {}
 
-    template <typename T> T *data() { return reinterpret_cast<T *>(&(*data_holder)[0]); }
+    template <typename T> T *data() { return reinterpret_cast<T *>(data_holder->data()); }
 
     template <typename T> const T *data() const
     {
-        return reinterpret_cast<T *>(&(*data_holder)[0]);
+        return reinterpret_cast<T *>(data_holder->data());
     }
 
     template <typename T> std::vector<T> as_vec() const
