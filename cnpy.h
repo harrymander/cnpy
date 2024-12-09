@@ -6,16 +6,11 @@
 #define LIBCNPY_H_
 
 #include <cassert>
-#include <cstdint>
 #include <iostream>
 #include <istream>
 #include <map>
 #include <memory>
-#include <numeric>
-#include <sstream>
-#include <stdexcept>
 #include <string>
-#include <typeinfo>
 #include <vector>
 
 namespace cnpy {

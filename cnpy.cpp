@@ -6,28 +6,29 @@
 
 #include "cnpy.h"
 
+#include <type_traits>
 #include <zlib.h>
 
-#include <algorithm>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
-#include <iomanip>
 #include <istream>
 #include <regex>
 #include <stdexcept>
 
 namespace cnpy {
 
-static inline void np_assert(bool condition, const std::string& msg)
+namespace {
+
+inline void np_assert(bool condition, const std::string& msg)
 {
     if (!condition) {
         throw std::runtime_error(msg);
     }
 }
 
-static std::ifstream open_stream(std::string fname)
+std::ifstream open_stream(std::string fname)
 {
     std::ifstream stream(fname, std::ios::binary | std::ios::in);
     if (!stream) {
@@ -36,10 +37,10 @@ static std::ifstream open_stream(std::string fname)
     return stream;
 }
 
-static NpyArray load_npz_array(std::istream& stream, uint32_t compr_bytes, uint32_t uncompr_bytes)
+NpyArray load_npz_array(std::istream& stream, uint32_t compr_bytes, uint32_t uncompr_bytes)
 {
-    std::vector<unsigned char> buffer_compr(compr_bytes);
-    std::vector<unsigned char> buffer_uncompr(uncompr_bytes);
+    std::vector<uint8_t> buffer_compr(compr_bytes);
+    std::vector<uint8_t> buffer_uncompr(uncompr_bytes);
     stream.read(reinterpret_cast<char *>(buffer_compr.data()), compr_bytes);
     if (!stream.good()) {
         throw std::runtime_error("load_npz_array: failed to read data");
@@ -65,25 +66,33 @@ static NpyArray load_npz_array(std::istream& stream, uint32_t compr_bytes, uint3
     std::vector<size_t> shape;
     size_t word_size;
     bool fortran_order;
-    cnpy::parse_npy_header(&buffer_uncompr[0], word_size, shape, fortran_order);
+    parse_npy_header(&buffer_uncompr[0], word_size, shape, fortran_order);
 
-    cnpy::NpyArray array(shape, word_size, fortran_order);
+    NpyArray array(shape, word_size, fortran_order);
 
     size_t offset = uncompr_bytes - array.num_bytes();
-    memcpy(array.data<unsigned char>(), &buffer_uncompr[0] + offset, array.num_bytes());
+    std::memcpy(array.data<uint8_t>(), &buffer_uncompr[0] + offset, array.num_bytes());
 
     return array;
 }
 
-}; // namespace cnpy
+template <typename T> T copy_from_buffer(const uint8_t *buffer)
+{
+    static_assert(std::is_trivial<T>::value, "T must be a trivial type");
+    T val;
+    std::memcpy(&val, buffer, sizeof(T));
+    return val;
+}
 
-template <> std::vector<char>& cnpy::operator+=(std::vector<char>& lhs, const std::string& rhs)
+}; // namespace
+
+template <> std::vector<char>& operator+=(std::vector<char>& lhs, const std::string& rhs)
 {
     lhs.insert(lhs.end(), rhs.begin(), rhs.end());
     return lhs;
 }
 
-template <> std::vector<char>& cnpy::operator+=(std::vector<char>& lhs, const char *rhs)
+template <> std::vector<char>& operator+=(std::vector<char>& lhs, const char *rhs)
 {
     // write in little endian
     size_t len = strlen(rhs);
@@ -94,11 +103,11 @@ template <> std::vector<char>& cnpy::operator+=(std::vector<char>& lhs, const ch
     return lhs;
 }
 
-void cnpy::parse_npy_header(
-    unsigned char *buffer, size_t& word_size, std::vector<size_t>& shape, bool& fortran_order
+void parse_npy_header(
+    uint8_t *buffer, size_t& word_size, std::vector<size_t>& shape, bool& fortran_order
 )
 {
-    uint16_t header_len = *reinterpret_cast<uint16_t *>(buffer + 8);
+    auto header_len = copy_from_buffer<uint16_t>(buffer + 8);
     std::string header(reinterpret_cast<char *>(buffer + 9), header_len);
 
     size_t loc1, loc2;
@@ -133,7 +142,7 @@ void cnpy::parse_npy_header(
     word_size = atoi(str_ws.substr(0, loc2).c_str());
 }
 
-void cnpy::parse_npy_header(
+void parse_npy_header(
     std::istream& stream, size_t& word_size, std::vector<size_t>& shape, bool& fortran_order
 )
 {
@@ -194,18 +203,18 @@ void cnpy::parse_npy_header(
     word_size = atoi(str_ws.substr(0, loc2).c_str());
 }
 
-cnpy::npz_t cnpy::npz_load(const std::string& fname)
+npz_t npz_load(const std::string& fname)
 {
-    auto stream = cnpy::open_stream(fname);
-    return cnpy::npz_load(stream);
+    auto stream = open_stream(fname);
+    return npz_load(stream);
 }
 
-cnpy::npz_t cnpy::npz_load(std::istream& stream)
+npz_t npz_load(std::istream& stream)
 {
-    cnpy::npz_t arrays;
+    npz_t arrays;
     while (1) {
-        std::vector<char> local_header(30);
-        stream.read(local_header.data(), 30);
+        std::vector<uint8_t> local_header(30);
+        stream.read(reinterpret_cast<char *>(local_header.data()), 30);
         if (!stream.good()) {
             throw std::runtime_error("npz_load: failed to read local header");
         }
@@ -215,7 +224,7 @@ cnpy::npz_t cnpy::npz_load(std::istream& stream)
             break;
 
         // read in the variable name
-        uint16_t name_len = *reinterpret_cast<uint16_t *>(&local_header[26]);
+        auto name_len = copy_from_buffer<uint16_t>(&local_header[26]);
         std::string varname(name_len, ' ');
         stream.read(&varname[0], name_len);
         if (!stream.good()) {
@@ -226,7 +235,7 @@ cnpy::npz_t cnpy::npz_load(std::istream& stream)
         varname.erase(varname.end() - 4, varname.end());
 
         // read in the extra field
-        uint16_t extra_field_len = *reinterpret_cast<uint16_t *>(&local_header[28]);
+        auto extra_field_len = copy_from_buffer<uint16_t>(&local_header[28]);
         if (extra_field_len > 0) {
             std::vector<char> buff(extra_field_len);
             stream.read(buff.data(), extra_field_len);
@@ -235,9 +244,9 @@ cnpy::npz_t cnpy::npz_load(std::istream& stream)
             }
         }
 
-        uint16_t compr_method = *reinterpret_cast<uint16_t *>(&local_header[0] + 8);
-        uint32_t compr_bytes = *reinterpret_cast<uint32_t *>(&local_header[0] + 18);
-        uint32_t uncompr_bytes = *reinterpret_cast<uint32_t *>(&local_header[0] + 22);
+        auto compr_method = copy_from_buffer<uint16_t>(&local_header[0] + 8);
+        auto compr_bytes = copy_from_buffer<uint32_t>(&local_header[0] + 18);
+        auto uncompr_bytes = copy_from_buffer<uint32_t>(&local_header[0] + 22);
 
         if (compr_method == 0) {
             arrays[varname] = npy_load(stream);
@@ -249,17 +258,17 @@ cnpy::npz_t cnpy::npz_load(std::istream& stream)
     return arrays;
 }
 
-cnpy::NpyArray cnpy::npz_load(const std::string& fname, const std::string& varname)
+NpyArray npz_load(const std::string& fname, const std::string& varname)
 {
-    auto stream = cnpy::open_stream(fname);
-    return cnpy::npz_load(stream, varname);
+    auto stream = open_stream(fname);
+    return npz_load(stream, varname);
 }
 
-cnpy::NpyArray cnpy::npz_load(std::istream& stream, const std::string& varname)
+NpyArray npz_load(std::istream& stream, const std::string& varname)
 {
     while (1) {
-        std::vector<char> local_header(30);
-        stream.read(local_header.data(), 30);
+        std::vector<uint8_t> local_header(30);
+        stream.read(reinterpret_cast<char *>(local_header.data()), 30);
         if (!stream.good()) {
             throw std::runtime_error("npz_load: failed to read local header");
         }
@@ -269,7 +278,7 @@ cnpy::NpyArray cnpy::npz_load(std::istream& stream, const std::string& varname)
             break;
 
         // read in the variable name
-        uint16_t name_len = *reinterpret_cast<uint16_t *>(&local_header[26]);
+        auto name_len = copy_from_buffer<uint16_t>(&local_header[26]);
         std::string vname(name_len, ' ');
         stream.read(&vname[0], name_len);
         if (!stream.good()) {
@@ -278,15 +287,15 @@ cnpy::NpyArray cnpy::npz_load(std::istream& stream, const std::string& varname)
         vname.erase(vname.end() - 4, vname.end()); // erase the lagging .npy
 
         // read in the extra field
-        uint16_t extra_field_len = *reinterpret_cast<uint16_t *>(&local_header[28]);
+        auto extra_field_len = copy_from_buffer<uint16_t>(&local_header[28]);
         stream.seekg(extra_field_len, std::ios_base::cur);
         if (stream.fail()) {
             throw std::runtime_error("npz_load: failed to seek past extra field");
         }
 
-        uint16_t compr_method = *reinterpret_cast<uint16_t *>(&local_header[0] + 8);
-        uint32_t compr_bytes = *reinterpret_cast<uint32_t *>(&local_header[0] + 18);
-        uint32_t uncompr_bytes = *reinterpret_cast<uint32_t *>(&local_header[0] + 22);
+        auto compr_method = copy_from_buffer<uint16_t>(&local_header[0] + 8);
+        auto compr_bytes = copy_from_buffer<uint32_t>(&local_header[0] + 18);
+        auto uncompr_bytes = copy_from_buffer<uint32_t>(&local_header[0] + 22);
 
         if (vname == varname) {
             NpyArray array = (compr_method == 0) ?
@@ -295,7 +304,7 @@ cnpy::NpyArray cnpy::npz_load(std::istream& stream, const std::string& varname)
             return array;
         } else {
             // skip past the data
-            uint32_t size = *reinterpret_cast<uint32_t *>(&local_header[22]);
+            auto size = copy_from_buffer<uint32_t>(&local_header[22]);
             stream.seekg(size, std::ios_base::cur);
             if (stream.fail()) {
                 throw std::runtime_error("npz_load: failed to seek past data");
@@ -307,20 +316,20 @@ cnpy::NpyArray cnpy::npz_load(std::istream& stream, const std::string& varname)
     throw std::runtime_error("npz_load: Variable name " + varname + " not found");
 }
 
-cnpy::NpyArray cnpy::npy_load(const std::string& fname)
+NpyArray npy_load(const std::string& fname)
 {
-    auto stream = cnpy::open_stream(fname);
-    return cnpy::npy_load(stream);
+    auto stream = open_stream(fname);
+    return npy_load(stream);
 }
 
-cnpy::NpyArray cnpy::npy_load(std::istream& stream)
+NpyArray npy_load(std::istream& stream)
 {
     std::vector<size_t> shape;
     size_t word_size;
     bool fortran_order;
-    cnpy::parse_npy_header(stream, word_size, shape, fortran_order);
+    parse_npy_header(stream, word_size, shape, fortran_order);
 
-    cnpy::NpyArray arr(shape, word_size, fortran_order);
+    NpyArray arr(shape, word_size, fortran_order);
     if (arr.num_vals > 0) {
         stream.read(arr.data<char>(), arr.num_bytes());
         if (!stream.good()) {
@@ -329,3 +338,5 @@ cnpy::NpyArray cnpy::npy_load(std::istream& stream)
     }
     return arr;
 }
+
+}; // namespace cnpy
