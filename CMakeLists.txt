@@ -41,6 +41,7 @@ if(CNPY_INSTALL)
     install(
         EXPORT cnpy-targets
         FILE cnpy-targets.cmake
+        NAMESPACE cnpy::
         DESTINATION lib/cmake/cnpy
     )
     install(TARGETS cnpy EXPORT cnpy-targets DESTINATION lib)
