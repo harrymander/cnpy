@@ -154,7 +154,7 @@ void parse_npy_header(
 
     std::string header;
     header.resize(255);
-    stream.getline(header.data(), 256);
+    stream.getline(&header[0], 256);
 
     // getline reads newline and counts it towards gcount() but does not store it
     header.resize(stream.gcount() - 1);
