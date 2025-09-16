@@ -22,13 +22,13 @@ if(NOT MSVC)
     target_compile_options(cnpy PRIVATE -Wall -Wextra)
 endif()
 
-if(NOT DEFINED CNPY_INSTALL)
-    if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-        set(CNPY_INSTALL TRUE)
-    else()
-        set(CNPY_INSTALL FALSE)
-    endif()
+if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+    set(CNPY_INSTALL_DEFAULT TRUE)
+else()
+    set(CNPY_INSTALL_DEFAULT FALSE)
 endif()
+option(CNPY_INSTALL "Add install targets" ${CNPY_INSTALL_DEFAULT})
+
 if(CNPY_INSTALL)
     install(
         TARGETS "cnpy"
