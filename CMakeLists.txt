@@ -38,16 +38,16 @@ if(CNPY_INSTALL)
             GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
     )
     install(FILES cnpy.h DESTINATION include)
+    install(TARGETS cnpy EXPORT cnpy-targets DESTINATION lib)
     install(
         EXPORT cnpy-targets
         FILE cnpy-targets.cmake
         NAMESPACE cnpy::
-        DESTINATION lib/cmake/cnpy
+        DESTINATION share/cnpy/cmake
     )
-    install(TARGETS cnpy EXPORT cnpy-targets DESTINATION lib)
 
     include(CMakePackageConfigHelpers)
-    set(config_install_dest share/cmake/cnpy)
+    set(config_install_dest share/cnpy/cmake)
     set(config_file ${CMAKE_CURRENT_BINARY_DIR}/cnpyConfig.cmake)
     configure_package_config_file(
         ${CMAKE_CURRENT_SOURCE_DIR}/cnpyConfig.cmake.in
