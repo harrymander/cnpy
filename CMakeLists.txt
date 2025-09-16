@@ -45,4 +45,17 @@ if(CNPY_INSTALL)
         DESTINATION lib/cmake/cnpy
     )
     install(TARGETS cnpy EXPORT cnpy-targets DESTINATION lib)
+
+    include(CMakePackageConfigHelpers)
+    set(config_install_dest share/cmake/cnpy)
+    set(config_file ${CMAKE_CURRENT_BINARY_DIR}/cnpyConfig.cmake)
+    configure_package_config_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/cnpyConfig.cmake.in
+        ${config_file}
+        INSTALL_DESTINATION ${config_install_dest}
+    )
+    install(
+        FILES ${config_file}
+        DESTINATION ${config_install_dest}
+    )
 endif()

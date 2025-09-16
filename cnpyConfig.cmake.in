@@ -1,0 +1,7 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+find_dependency(ZLIB REQUIRED)
+
+include(${PACKAGE_PREFIX_DIR}/lib/cmake/cnpy/cnpy-targets.cmake)
+check_required_components(cnpy)
