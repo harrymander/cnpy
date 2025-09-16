@@ -54,8 +54,5 @@ if(CNPY_INSTALL)
         ${config_file}
         INSTALL_DESTINATION ${config_install_dest}
     )
-    install(
-        FILES ${config_file}
-        DESTINATION ${config_install_dest}
-    )
+    install(FILES ${config_file} DESTINATION ${config_install_dest})
 endif()
